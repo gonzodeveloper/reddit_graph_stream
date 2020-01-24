@@ -1,59 +1,48 @@
 import praw
 import argparse
-import igraph
 import yaml
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--config", type=str, required=True,
+    parser.add_argument("--config_yaml", type=str, required=True,
                         help="path to config yml specifying reddit client info")
     parser.add_argument("--target", type=str, required=True,
                         help="sub reddit you wish to scrape")
+    parser.add_argument("--output", type=str, required=True,
+                        help="outputfile")
 
     args = parser.parse_args()
 
     # Open YAML config
-    with open(args.config_file, "r") as config_file:
+    with open(args.config_yaml, "r") as config_file:
         config = yaml.load(config_file)
 
     # Get Reddit Client
-    reddit = praw.Reddit(client_id=config['id'],
-                         client_secret=config['secret'],
-                         username=config['user'],
-                         password=config['psswd'],
-                         user_agent=config['agent'])
+    reddit = praw.Reddit(client_id=config['client_id'],
+                         client_secret=config['client_secret'],
+                         username=config['username'],
+                         password=config['password'],
+                         user_agent=config['user_agent'])
 
     # Get subreddit
-    subreddit = reddit.subreddit(args.target_subreddit)
-    edges = []
-    vertices = []
+    subreddit = reddit.subreddit(args.target)
 
-    # Stream comments until user decides otherwise
-    for idx, comment in enumerate(subreddit.stream.comments()):
-        try:
+    # Open file to append too
+    with open(args.output, "a") as output:
 
-            print("Streaming Comments...{}".format(idx), end="\r")
-            parent = comment.parent()
+        # Stream comments until user decides otherwise
+        for idx, comment in enumerate(subreddit.stream.comments()):
+            try:
+                print("Streaming Comments...{}".format(idx), end="\r")
+                parent = comment.parent()
 
-            if comment.author is not None and comment.author not in vertices:
-                vertices.append(comment.author.name)
-            if parent.author is not None and parent.author not in vertices:
-                vertices.append(parent.author.name)
+                if comment.author is not None and parent.author is not None:
+                    output.write(comment.author.name + " " + parent.author.name + "\n")
+                    output.flush()
 
-            if comment.author is not None and parent.author is not None:
-                edges.append((comment.author.name, parent.author.name))
+            # Once we have a keyboard interupt then we save the graph
+            except KeyboardInterrupt as e:
+                exit()
 
-        # Once we have a keyboard interupt then we save the graph
-        except KeyboardInterrupt as e:
-            print()
-            graph = igraph.Graph()
-            graph.add_vertices(vertices)
-            graph.add_edges(edges)
-
-            print("Steaming Complete: Graph Summary")
-            igraph.summary(graph)
-
-            graph.write_graphml("{}.graphml".format(args.target_subreddit))
-            exit()
